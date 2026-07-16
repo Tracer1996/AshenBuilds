@@ -57,16 +57,20 @@ function AB:CreateUI()
   for i=1,table.getn(leftSlots) do self:CreateGearSlot(f,leftSlots[i],24,-140-(i-1)*62,"left") end
   for i=1,table.getn(rightSlots) do self:CreateGearSlot(f,rightSlots[i],900,-140-(i-1)*62,"right") end
 
-  local stats=CreateFrame("Frame",nil,f); stats:SetWidth(520); stats:SetHeight(490); stats:SetPoint("TOP",f,"TOP",0,-132); stats:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=12,insets={left=4,right=4,top=4,bottom=4}}); stats:SetBackdropColor(.045,.065,.1,.98); stats:SetBackdropBorderColor(.2,.28,.4,1); self.statsPanel=stats
+  local stats=CreateFrame("Frame",nil,f); stats:SetWidth(456); stats:SetHeight(490); stats:SetPoint("TOP",f,"TOP",0,-132); stats:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=12,insets={left=4,right=4,top=4,bottom=4}}); stats:SetBackdropColor(.045,.065,.1,.98); stats:SetBackdropBorderColor(.2,.28,.4,1); self.statsPanel=stats
   local st=stats:CreateFontString(nil,"OVERLAY","GameFontNormal"); st:SetPoint("TOP",stats,"TOP",0,-10); st:SetText("CHARACTER TOTALS")
   self.statsColumns={}
-  for i=1,3 do local c=CreateFrame("Frame",nil,stats); c:SetWidth(164); c:SetHeight(445); c:SetPoint("TOPLEFT",stats,"TOPLEFT",8+(i-1)*170,-34); self.statsColumns[i]=c end
+  local statTitles={"BASE STATS","RESOURCES","MELEE & RANGED","SPELLS & HEALING","DEFENSE","RESISTANCES"}
+  local statPositions={{8,-34},{228,-34},{8,-159},{228,-159},{8,-349},{228,-349}}
+  for i=1,6 do local c=CreateFrame("Frame",nil,stats); c:SetWidth(212); c:SetHeight(120); c:SetPoint("TOPLEFT",stats,"TOPLEFT",statPositions[i][1],statPositions[i][2]); c.lines={}; Section(c,statTitles[i],-8); self.statsColumns[i]=c end
 
   local weaponY=-640
   self:CreateGearSlot(f,"MAINHAND",285,weaponY,"left"); self:CreateGearSlot(f,"OFFHAND",462,weaponY,"left"); self:CreateGearSlot(f,"RANGED",639,weaponY,"left")
   local setPanel=CreateFrame("Frame",nil,f); setPanel:SetWidth(1025); setPanel:SetHeight(105); setPanel:SetPoint("BOTTOM",f,"BOTTOM",0,20); setPanel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=10,insets={left=3,right=3,top=3,bottom=3}}); setPanel:SetBackdropColor(.035,.05,.075,.98); self.setPanel=setPanel
   local sh=setPanel:CreateFontString(nil,"OVERLAY","GameFontNormalSmall"); sh:SetPoint("TOPLEFT",setPanel,"TOPLEFT",12,-9); sh:SetText("SET BONUSES")
-  self.setText=setPanel:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); self.setText:SetPoint("TOPLEFT",setPanel,"TOPLEFT",14,-27); self.setText:SetWidth(995); self.setText:SetHeight(68); self.setText:SetJustifyH("LEFT"); self.setText:SetJustifyV("TOP")
+  local setScroll=CreateFrame("ScrollFrame","AshenBuildsSetScroll",setPanel,"UIPanelScrollFrameTemplate"); setScroll:SetPoint("TOPLEFT",setPanel,"TOPLEFT",12,-26); setScroll:SetPoint("BOTTOMRIGHT",setPanel,"BOTTOMRIGHT",-31,8); self.setScroll=setScroll
+  local setContent=CreateFrame("Frame",nil,setScroll); setContent:SetWidth(960); setContent:SetHeight(68); setScroll:SetScrollChild(setContent); self.setContent=setContent; self.setBlocks={}
+  if setScroll.EnableMouseWheel then setScroll:EnableMouseWheel(true); setScroll:SetScript("OnMouseWheel",function() local bar=getglobal("AshenBuildsSetScrollScrollBar"); if bar then local value=bar:GetValue()-(arg1 or 0)*24; local low,high=bar:GetMinMaxValues(); if value<low then value=low elseif value>high then value=high end; bar:SetValue(value) end end) end
 
   self:CreateBuildBrowser(); self:CreateItemBrowser(); self:CreateSourcePanel(); self:CreateEnchantBrowser(); self:CreateCodeDialog(); self:RefreshUI()
 end
@@ -83,17 +87,19 @@ function AB:RefreshUI()
   self:RefreshStats(); self:RefreshSetBonuses()
 end
 
-function AB:ClearStatColumns() local i,c,j for i=1,3 do c=self.statsColumns[i]; if c.lines then for j=1,table.getn(c.lines) do c.lines[j]:Hide() end end; c.lines={} end end
+function AB:ClearStatColumns() local i,c,j for i=1,6 do c=self.statsColumns[i]; if c.lines then for j=1,table.getn(c.lines) do c.lines[j]:Hide() end end; c.lines={} end end
 function AB:PutStat(col,label,value,y,color)
   local c=self.statsColumns[col]; local a,b=StatLine(c,label,value,y,color); table.insert(c.lines,a); table.insert(c.lines,b)
 end
-function AB:PutSection(col,title,y) local c=self.statsColumns[col]; Section(c,title,y); table.insert(c.lines,c:GetRegions()) end
 
 function AB:RefreshStats()
-  self:ClearStatColumns(); local ok,d=pcall(function() return AB:GetDerivedStats(self.current) end); if not ok or not d then self:PutStat(1,"Calculation error",tostring(d),-8,{1,.2,.2}); return end
-  local y=-8; Section(self.statsColumns[1],"BASE STATS",y); y=y-26; self:PutStat(1,"Strength",F(d.str),y); y=y-18; self:PutStat(1,"Agility",F(d.agi),y); y=y-18; self:PutStat(1,"Stamina",F(d.sta),y); y=y-18; self:PutStat(1,"Intellect",F(d.int),y); y=y-18; self:PutStat(1,"Spirit",F(d.spi),y); y=y-28; Section(self.statsColumns[1],"RESOURCES",y); y=y-26; self:PutStat(1,"Health",F(d.health),y); y=y-18; if d.mana and d.mana>0 then self:PutStat(1,"Mana",F(d.mana),y); y=y-18 end; self:PutStat(1,"Armor",F(d.armor),y)
-  y=-8; Section(self.statsColumns[2],"MELEE & RANGED",y); y=y-26; self:PutStat(2,"Attack Power",F(d.attackPower),y); y=y-18; self:PutStat(2,"Ranged AP",F(d.rangedAttackPower),y); y=y-18; self:PutStat(2,"Melee Crit",F(d.meleeCrit).."%",y); y=y-18; self:PutStat(2,"Ranged Crit",F(d.rangedCrit).."%",y); y=y-18; self:PutStat(2,"Melee Hit",F(d.hit).."%",y); y=y-18; self:PutStat(2,"Ranged Hit",F(d.rangedHit).."%",y); y=y-18; if d.mainSkill then self:PutStat(2,"MH "..d.mainSkill.type,F(d.mainSkill.total),y); y=y-18 end; if d.offSkill then self:PutStat(2,"OH "..d.offSkill.type,F(d.offSkill.total),y); y=y-18 end; if d.rangedSkill then self:PutStat(2,"Ranged "..d.rangedSkill.type,F(d.rangedSkill.total),y) end
-  y=-8; Section(self.statsColumns[3],"SPELLS & HEALING",y); y=y-26; self:PutStat(3,"Spell Power",F(d.spellPower),y); y=y-18; self:PutStat(3,"Healing",F(d.healing),y); y=y-18; self:PutStat(3,"Spell Crit",F(d.spellCrit).."%",y); y=y-18; self:PutStat(3,"Spell Hit",F(d.spellHit).."%",y); y=y-18; self:PutStat(3,"MP5",F(d.mp5),y); y=y-28; Section(self.statsColumns[3],"DEFENSE",y); y=y-26; self:PutStat(3,"Defense",F(d.defense),y); y=y-18; self:PutStat(3,"Dodge",F(d.dodge).."%",y); y=y-18; self:PutStat(3,"Parry",F(d.parry).."%",y); y=y-18; self:PutStat(3,"Block",F(d.block).."%",y); y=y-18; self:PutStat(3,"Block Value",F(d.blockValue),y); y=y-28; Section(self.statsColumns[3],"RESISTANCES",y); y=y-26; self:PutStat(3,"Fire",F(d.resistances.fire),y); y=y-18; self:PutStat(3,"Frost",F(d.resistances.frost),y); y=y-18; self:PutStat(3,"Nature",F(d.resistances.nature),y); y=y-18; self:PutStat(3,"Shadow",F(d.resistances.shadow),y); y=y-18; self:PutStat(3,"Arcane",F(d.resistances.arcane),y)
+  self:ClearStatColumns(); local ok,d=pcall(function() return AB:GetDerivedStats(self.current) end); if not ok or not d then self:PutStat(1,"Calculation error",tostring(d),-34,{1,.2,.2}); return end
+  local y=-34; self:PutStat(1,"Strength",F(d.str),y); y=y-18; self:PutStat(1,"Agility",F(d.agi),y); y=y-18; self:PutStat(1,"Stamina",F(d.sta),y); y=y-18; self:PutStat(1,"Intellect",F(d.int),y); y=y-18; self:PutStat(1,"Spirit",F(d.spi),y)
+  y=-34; self:PutStat(2,"Health",F(d.health),y); y=y-18; if d.mana and d.mana>0 then self:PutStat(2,"Mana",F(d.mana),y); y=y-18 end; self:PutStat(2,"Armor",F(d.armor),y)
+  y=-34; self:PutStat(3,"Attack Power",F(d.attackPower),y); y=y-18; self:PutStat(3,"Ranged AP",F(d.rangedAttackPower),y); y=y-18; self:PutStat(3,"Melee Crit",F(d.meleeCrit).."%",y); y=y-18; self:PutStat(3,"Ranged Crit",F(d.rangedCrit).."%",y); y=y-18; self:PutStat(3,"Melee Hit",F(d.hit).."%",y); y=y-18; self:PutStat(3,"Ranged Hit",F(d.rangedHit).."%",y); y=y-18; if d.mainSkill then self:PutStat(3,"MH "..d.mainSkill.type,F(d.mainSkill.total),y); y=y-18 end; if d.offSkill then self:PutStat(3,"OH "..d.offSkill.type,F(d.offSkill.total),y); y=y-18 end; if d.rangedSkill then self:PutStat(3,"Ranged "..d.rangedSkill.type,F(d.rangedSkill.total),y) end
+  y=-34; self:PutStat(4,"Spell Power",F(d.spellPower),y); y=y-18; self:PutStat(4,"Healing",F(d.healing),y); y=y-18; self:PutStat(4,"Spell Crit",F(d.spellCrit).."%",y); y=y-18; self:PutStat(4,"Spell Hit",F(d.spellHit).."%",y); y=y-18; self:PutStat(4,"MP5",F(d.mp5),y)
+  y=-34; self:PutStat(5,"Defense",F(d.defense),y); y=y-18; self:PutStat(5,"Dodge",F(d.dodge).."%",y); y=y-18; self:PutStat(5,"Parry",F(d.parry).."%",y); y=y-18; self:PutStat(5,"Block",F(d.block).."%",y); y=y-18; self:PutStat(5,"Block Value",F(d.blockValue),y)
+  y=-34; self:PutStat(6,"Fire",F(d.resistances.fire),y); y=y-18; self:PutStat(6,"Frost",F(d.resistances.frost),y); y=y-18; self:PutStat(6,"Nature",F(d.resistances.nature),y); y=y-18; self:PutStat(6,"Shadow",F(d.resistances.shadow),y); y=y-18; self:PutStat(6,"Arcane",F(d.resistances.arcane),y)
 end
 
 function AB:RefreshSetBonuses()
@@ -103,25 +109,44 @@ function AB:RefreshSetBonuses()
     if setId then counts[setId]=(counts[setId] or 0)+1 end
   end
   local ids={}; for setId in pairs(counts) do table.insert(ids,setId) end; table.sort(ids)
-  local out={}; local index,count,set,i,b,total
+  local entries={}; local index,count,set,i,b,total,lines,entry
   for index=1,table.getn(ids) do
     setId=ids[index]; count=counts[setId]; set=self:GetItemSet(setId)
     if set then
       total=table.getn(set.items or {})
-      table.insert(out,"|cffffd100"..(set.name or "Item Set").." ("..count.."/"..total..")|r")
+      lines={"|cffffd100"..(set.name or "Item Set").." ("..count.."/"..total..")|r"}
       for i=1,table.getn(set.bonuses or {}) do
         b=set.bonuses[i]
         if b and b[3] and b[3]~="" then
-          table.insert(out,(count>=(b[1] or 0) and "|cff33ff66" or "|cff777f8f").."("..(b[1] or 0)..") Set: "..b[3].."|r")
+          table.insert(lines,(count>=(b[1] or 0) and "|cff33ff66" or "|cff777f8f").."("..(b[1] or 0)..") Set: "..b[3].."|r")
         end
       end
-      if index<table.getn(ids) then table.insert(out,"") end
+      table.insert(entries,{text=table.concat(lines,"\n"),lines=table.getn(lines)})
     else
       local loaded=(self.SetCatalogMeta and self.SetCatalogMeta.setCount) or (AshenDB and AshenDB.GetSetCount and AshenDB:GetSetCount()) or 0
-      table.insert(out,"|cffff3333Set data missing for #"..setId.." ("..loaded.." definitions loaded)|r")
+      table.insert(entries,{text="|cffff3333Set data missing for #"..setId.." ("..loaded.." definitions loaded)|r",lines=1})
     end
   end
-  if table.getn(out)==0 then self.setText:SetText("|cff697386No item set pieces equipped.|r") else self.setText:SetText(table.concat(out,"\n")) end
+  if table.getn(entries)==0 then table.insert(entries,{text="|cff697386No item set pieces equipped.|r",lines=1,full=true}) end
+  for i=1,table.getn(self.setBlocks) do self.setBlocks[i]:Hide() end
+  local contentHeight=0
+  for index=1,table.getn(entries),2 do
+    local rowHeight=0; local col
+    for col=0,1 do
+      i=index+col
+      if i<=table.getn(entries) then
+        entry=entries[i]
+        if not self.setBlocks[i] then self.setBlocks[i]=self.setContent:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); self.setBlocks[i]:SetJustifyH("LEFT"); self.setBlocks[i]:SetJustifyV("TOP") end
+        local block=self.setBlocks[i]; block:ClearAllPoints(); block:SetPoint("TOPLEFT",self.setContent,"TOPLEFT",entry.full and 2 or 2+col*480,-contentHeight); block:SetWidth(entry.full and 930 or 462); block:SetText(entry.text); block:Show()
+        rowHeight=math.max(rowHeight,block:GetHeight() or 0,entry.lines*13)
+      end
+    end
+    contentHeight=contentHeight+rowHeight+12
+  end
+  contentHeight=math.max(68,contentHeight-12); self.setContent:SetHeight(contentHeight)
+  if self.setScroll.UpdateScrollChildRect then self.setScroll:UpdateScrollChildRect() end
+  local bar=getglobal("AshenBuildsSetScrollScrollBar")
+  if bar then local range=math.max(0,contentHeight-68); local value=math.min(bar:GetValue() or 0,range); bar:SetMinMaxValues(0,range); bar:SetValueStep(24); bar:SetValue(value); if range>0 then bar:Show() else bar:Hide() end end
 end
 
 function AB:RefreshBuildList()
